@@ -1,21 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { Calendar, Plus, Trophy, Users } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Calendar, Plus, Trophy, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+interface Event {
+  id: string;
+  name: string;
+  date: string;
+  location: string;
+  description: string;
+  type: string;
+}
+
+interface Reward {
+  id: string;
+  name: string;
+  points: number;
+  description: string;
+  emoji: string;
+}
 
 export default function Home() {
   const [currentView, setCurrentView] = useState("home");
+  const [events, setEvents] = useState<Event[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
+
+  // Load data on component mount
+  useEffect(() => {
+    loadEvents();
+    loadRewards();
+  }, []);
+
+  const loadEvents = async () => {
+    try {
+      const response = await fetch('/api/events');
+      const data = await response.json();
+      setEvents(data);
+    } catch {
+      console.error('Failed to load events');
+    }
+  };
+
+  const loadRewards = async () => {
+    try {
+      const response = await fetch('/api/rewards');
+      const data = await response.json();
+      setRewards(data.sort((a: Reward, b: Reward) => b.points - a.points));
+    } catch {
+      console.error('Failed to load rewards');
+    }
+  };
 
   const renderContent = () => {
     switch (currentView) {
       case "calendar":
-        return <CalendarView />;
+        return <CalendarView events={events} />;
       case "events":
-        return <EventsView />;
+        return <EventsView events={events} onEventCreated={loadEvents} />;
       case "rewards":
-        return <RewardsView />;
+        return <RewardsView rewards={rewards} onPointsAdded={loadRewards} />;
       default:
         return <HomeView setCurrentView={setCurrentView} />;
     }
@@ -145,7 +193,23 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
   );
 }
 
-function CalendarView() {
+function CalendarView({ events }: { events: Event[] }) {
+  const upcomingEvents = events
+    .filter(event => new Date(event.date) >= new Date())
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(0, 5);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div>
       <h2 className="text-3xl font-bold mb-6">Calendar & Events</h2>
@@ -157,16 +221,22 @@ function CalendarView() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="border-l-4 border-blue-600 pl-4">
-                  <h3 className="font-semibold">Sacrament Meeting</h3>
-                  <p className="text-sm text-gray-600">Sunday, 9:00 AM - Please arrive by 8:45 AM</p>
-                  <p className="text-sm text-gray-500">Chapel</p>
-                </div>
-                <div className="border-l-4 border-green-600 pl-4">
-                  <h3 className="font-semibold">Young Men Activity</h3>
-                  <p className="text-sm text-gray-600">Wednesday, 7:00 PM</p>
-                  <p className="text-sm text-gray-500">Cultural Hall</p>
-                </div>
+                {upcomingEvents.length > 0 ? (
+                  upcomingEvents.map((event) => (
+                    <div key={event.id} className={`border-l-4 pl-4 ${
+                      event.type === 'sacrament' ? 'border-blue-600' : 'border-green-600'
+                    }`}>
+                      <h3 className="font-semibold">{event.name}</h3>
+                      <p className="text-sm text-gray-600">{formatDate(event.date)}</p>
+                      <p className="text-sm text-gray-500">{event.location}</p>
+                      {event.description && (
+                        <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-500">No upcoming events. Add some in the Events section!</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -174,12 +244,17 @@ function CalendarView() {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle>Quick Stats</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Button className="w-full">Add New Event</Button>
-              <Button variant="outline" className="w-full">View All Events</Button>
-              <Button variant="outline" className="w-full">Export Calendar</Button>
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{events.length}</div>
+                <div className="text-sm text-gray-600">Total Events</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{upcomingEvents.length}</div>
+                <div className="text-sm text-gray-600">Upcoming Events</div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -188,7 +263,47 @@ function CalendarView() {
   );
 }
 
-function EventsView() {
+function EventsView({ events, onEventCreated }: { events: Event[], onEventCreated: () => void }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    date: '',
+    location: '',
+    description: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setFormData({ name: '', date: '', location: '', description: '' });
+        onEventCreated();
+        alert('Event created successfully!');
+      } else {
+        alert('Failed to create event');
+      }
+    } catch {
+      alert('Error creating event');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const recentEvents = events
+    .filter(event => new Date(event.date) < new Date())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
+
   return (
     <div>
       <h2 className="text-3xl font-bold mb-6">Event Management</h2>
@@ -198,37 +313,58 @@ function EventsView() {
             <CardTitle>Add New Event</CardTitle>
             <CardDescription>Schedule activities and meetings</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Event Name</label>
-              <input 
-                className="w-full p-2 border rounded-md" 
-                placeholder="e.g. Young Men Activity"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Date & Time</label>
-              <input 
-                type="datetime-local" 
-                className="w-full p-2 border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Location</label>
-              <input 
-                className="w-full p-2 border rounded-md" 
-                placeholder="e.g. Cultural Hall"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Description</label>
-              <textarea 
-                className="w-full p-2 border rounded-md" 
-                rows={3}
-                placeholder="Additional details about the event..."
-              />
-            </div>
-            <Button className="w-full">Create Event</Button>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Event Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  placeholder="e.g. Young Men Activity"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="date">Date & Time</Label>
+                <Input
+                  id="date"
+                  type="datetime-local"
+                  value={formData.date}
+                  onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  placeholder="e.g. Cultural Hall"
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  placeholder="Additional details about the event..."
+                  rows={3}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating Event...
+                  </>
+                ) : (
+                  'Create Event'
+                )}
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
@@ -238,16 +374,19 @@ function EventsView() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="p-3 bg-gray-50 rounded-md">
-                <h4 className="font-medium">Basketball Activity</h4>
-                <p className="text-sm text-gray-600">Last Wednesday, 7:00 PM</p>
-                <p className="text-sm text-gray-500">12 attendees</p>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-md">
-                <h4 className="font-medium">Service Project</h4>
-                <p className="text-sm text-gray-600">Last Saturday, 9:00 AM</p>
-                <p className="text-sm text-gray-500">8 attendees</p>
-              </div>
+              {recentEvents.length > 0 ? (
+                recentEvents.map((event) => (
+                  <div key={event.id} className="p-3 bg-gray-50 rounded-md">
+                    <h4 className="font-medium">{event.name}</h4>
+                    <p className="text-sm text-gray-600">
+                      {new Date(event.date).toLocaleDateString()}
+                    </p>
+                    <p className="text-sm text-gray-500">{event.location}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500">No past events yet.</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -256,7 +395,41 @@ function EventsView() {
   );
 }
 
-function RewardsView() {
+function RewardsView({ rewards, onPointsAdded }: { rewards: Reward[], onPointsAdded: () => void }) {
+  const [pointsForm, setPointsForm] = useState({ name: '', points: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAddPoints = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/rewards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: pointsForm.name,
+          points: parseInt(pointsForm.points),
+          action: 'add_points'
+        }),
+      });
+
+      if (response.ok) {
+        setPointsForm({ name: '', points: '' });
+        onPointsAdded();
+        alert('Points added successfully!');
+      } else {
+        alert('Failed to add points');
+      }
+    } catch {
+      alert('Error adding points');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div>
       <h2 className="text-3xl font-bold mb-6">Rewards & Recognition</h2>
@@ -268,64 +441,91 @@ function RewardsView() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-md border-l-4 border-yellow-400">
-                <div>
-                  <h4 className="font-medium">🥇 Early Bird Champion</h4>
-                  <p className="text-sm text-gray-600">Most on-time arrivals</p>
+              {rewards.map((reward, index) => (
+                <div key={reward.id} className={`flex items-center justify-between p-3 rounded-md border-l-4 ${
+                  index === 0 ? 'bg-yellow-50 border-yellow-400' :
+                  index === 1 ? 'bg-blue-50 border-blue-400' :
+                  index === 2 ? 'bg-green-50 border-green-400' :
+                  'bg-gray-50 border-gray-400'
+                }`}>
+                  <div>
+                    <h4 className="font-medium">{reward.emoji} {reward.name}</h4>
+                    <p className="text-sm text-gray-600">{reward.description}</p>
+                  </div>
+                  <span className={`text-xl font-bold ${
+                    index === 0 ? 'text-yellow-600' :
+                    index === 1 ? 'text-blue-600' :
+                    index === 2 ? 'text-green-600' :
+                    'text-gray-600'
+                  }`}>
+                    {reward.points}pts
+                  </span>
                 </div>
-                <span className="text-2xl font-bold text-yellow-600">250pts</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-md border-l-4 border-blue-400">
-                <div>
-                  <h4 className="font-medium">🥈 Activity Organizer</h4>
-                  <p className="text-sm text-gray-600">Event planning help</p>
-                </div>
-                <span className="text-xl font-bold text-blue-600">200pts</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-md border-l-4 border-green-400">
-                <div>
-                  <h4 className="font-medium">🥉 Perfect Attendance</h4>
-                  <p className="text-sm text-gray-600">Never missed an activity</p>
-                </div>
-                <span className="text-xl font-bold text-green-600">180pts</span>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Reward System</CardTitle>
-            <CardDescription>How to earn points</CardDescription>
+            <CardTitle>Add Points</CardTitle>
+            <CardDescription>Reward participation</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-2 border-b">
-                <span>Arrive early to sacrament (8:45 AM)</span>
-                <span className="font-bold text-green-600">+50pts</span>
+          <CardContent>
+            <form onSubmit={handleAddPoints} className="space-y-4">
+              <div>
+                <Label htmlFor="personName">Person Name</Label>
+                <Input
+                  id="personName"
+                  value={pointsForm.name}
+                  onChange={(e) => setPointsForm({...pointsForm, name: e.target.value})}
+                  placeholder="Enter name"
+                  required
+                />
               </div>
-              <div className="flex justify-between items-center p-2 border-b">
-                <span>Attend Young Men activity</span>
-                <span className="font-bold text-blue-600">+25pts</span>
+              <div>
+                <Label htmlFor="points">Points to Add</Label>
+                <Input
+                  id="points"
+                  type="number"
+                  value={pointsForm.points}
+                  onChange={(e) => setPointsForm({...pointsForm, points: e.target.value})}
+                  placeholder="Enter points"
+                  required
+                />
               </div>
-              <div className="flex justify-between items-center p-2 border-b">
-                <span>Help organize an event</span>
-                <span className="font-bold text-purple-600">+75pts</span>
-              </div>
-              <div className="flex justify-between items-center p-2 border-b">
-                <span>Bring a friend</span>
-                <span className="font-bold text-orange-600">+100pts</span>
-              </div>
-            </div>
-            
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Adding Points...
+                  </>
+                ) : (
+                  'Add Points'
+                )}
+              </Button>
+            </form>
+
             <div className="mt-6">
-              <h4 className="font-medium mb-2">Rewards Available:</h4>
-              <ul className="text-sm space-y-1 text-gray-600">
-                <li>• 500pts: Pizza party vote</li>
-                <li>• 300pts: Activity choice input</li>
-                <li>• 200pts: Recognition in sacrament</li>
-                <li>• 100pts: Special parking spot</li>
-              </ul>
+              <h4 className="font-medium mb-2">Point Values:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Arrive early to sacrament (8:45 AM)</span>
+                  <span className="font-bold text-green-600">+50pts</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Attend Young Men activity</span>
+                  <span className="font-bold text-blue-600">+25pts</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Help organize an event</span>
+                  <span className="font-bold text-purple-600">+75pts</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Bring a friend</span>
+                  <span className="font-bold text-orange-600">+100pts</span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
