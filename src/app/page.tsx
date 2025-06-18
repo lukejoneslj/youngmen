@@ -1,12 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, Plus, Users, Loader2 } from "lucide-react";
+import { Calendar, Plus, Users, Loader2, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Event {
   id: string;
@@ -39,7 +58,7 @@ export default function Home() {
   const renderContent = () => {
     switch (currentView) {
       case "calendar":
-        return <CalendarView events={events} />;
+        return <CalendarView events={events} onEventUpdated={loadEvents} onEventDeleted={loadEvents} />;
       case "events":
         return <EventsView events={events} onEventCreated={loadEvents} />;
       default:
@@ -148,7 +167,11 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
   );
 }
 
-function CalendarView({ events }: { events: Event[] }) {
+function CalendarView({ events, onEventUpdated, onEventDeleted }: { 
+  events: Event[], 
+  onEventUpdated: () => void,
+  onEventDeleted: () => void 
+}) {
   const upcomingEvents = events
     .filter(event => new Date(event.date) >= new Date())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -178,17 +201,25 @@ function CalendarView({ events }: { events: Event[] }) {
               <div className="space-y-4">
                 {upcomingEvents.length > 0 ? (
                   upcomingEvents.map((event) => (
-                    <div key={event.id} className={`border-l-4 pl-4 ${
+                    <div key={event.id} className={`border-l-4 pl-4 pr-4 py-3 rounded-r-md bg-white shadow-sm ${
                       event.type === 'sacrament' ? 'border-blue-600' : 'border-green-600'
                     }`}>
-                      <h3 className="font-semibold">{event.name}</h3>
-                      <p className="text-sm text-gray-600">{formatDate(event.date)}</p>
-                      {event.location && (
-                        <p className="text-sm text-gray-500">📍 {event.location}</p>
-                      )}
-                      {event.description && (
-                        <p className="text-sm text-gray-600 mt-1">{event.description}</p>
-                      )}
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h3 className="font-semibold">{event.name}</h3>
+                          <p className="text-sm text-gray-600">{formatDate(event.date)}</p>
+                          {event.location && (
+                            <p className="text-sm text-gray-500">📍 {event.location}</p>
+                          )}
+                          {event.description && (
+                            <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                          )}
+                        </div>
+                        <div className="flex space-x-2 ml-4">
+                          <EditEventDialog event={event} onEventUpdated={onEventUpdated} />
+                          <DeleteEventDialog event={event} onEventDeleted={onEventDeleted} />
+                        </div>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -231,6 +262,178 @@ function CalendarView({ events }: { events: Event[] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function EditEventDialog({ event, onEventUpdated }: { event: Event, onEventUpdated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: event.name,
+    date: event.date,
+    location: event.location,
+    description: event.description
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/events', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: event.id,
+          ...formData,
+        }),
+      });
+
+      if (response.ok) {
+        onEventUpdated();
+        setOpen(false);
+      } else {
+        alert('Failed to update event');
+      }
+    } catch {
+      alert('Error updating event');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Edit className="w-3 h-3" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Edit Event</DialogTitle>
+          <DialogDescription>
+            Update the event details below.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="edit-name">Event Name</Label>
+            <Input
+              id="edit-name"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-date">Date & Time</Label>
+            <Input
+              id="edit-date"
+              type="datetime-local"
+              value={formData.date}
+              onChange={(e) => setFormData({...formData, date: e.target.value})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-location">Location</Label>
+            <Input
+              id="edit-location"
+              value={formData.location}
+              onChange={(e) => setFormData({...formData, location: e.target.value})}
+              placeholder="e.g. Cultural Hall"
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-description">Description</Label>
+            <Textarea
+              id="edit-description"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              placeholder="Additional details..."
+              rows={3}
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Update Event'
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteEventDialog({ event, onEventDeleted }: { event: Event, onEventDeleted: () => void }) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(`/api/events?id=${event.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        onEventDeleted();
+      } else {
+        alert('Failed to delete event');
+      }
+    } catch {
+      alert('Error deleting event');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+          <Trash2 className="w-3 h-3" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Event</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete &ldquo;<strong>{event.name}</strong>&rdquo;? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              'Delete'
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

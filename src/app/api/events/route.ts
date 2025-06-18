@@ -53,4 +53,65 @@ export async function POST(request: NextRequest) {
     console.error('Error creating event:', error);
     return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
   }
+}
+
+// PUT - Update existing event
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, name, date, location, description } = body;
+
+    if (!id || !name || !date) {
+      return NextResponse.json({ error: 'ID, name and date are required' }, { status: 400 });
+    }
+
+    const updatedEvent = {
+      name,
+      date,
+      location: location || '',
+      description: description || '',
+    };
+
+    const { data, error } = await supabase
+      .from('events')
+      .update(updatedEvent)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error updating event:', error);
+    return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
+  }
+}
+
+// DELETE - Delete event
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Event ID is required' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting event:', error);
+    return NextResponse.json({ error: 'Failed to delete event' }, { status: 500 });
+  }
 } 
