@@ -14,13 +14,4 @@ export interface Event {
   description: string
   type: string
   created_at?: string
-}
-
-export interface Reward {
-  id: string
-  name: string
-  points: number
-  description: string
-  emoji: string
-  created_at?: string
 } 

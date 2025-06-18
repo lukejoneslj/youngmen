@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, Plus, Trophy, Users, Loader2 } from "lucide-react";
+import { Calendar, Plus, Users, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,23 +17,13 @@ interface Event {
   type: string;
 }
 
-interface Reward {
-  id: string;
-  name: string;
-  points: number;
-  description: string;
-  emoji: string;
-}
-
 export default function Home() {
   const [currentView, setCurrentView] = useState("home");
   const [events, setEvents] = useState<Event[]>([]);
-  const [rewards, setRewards] = useState<Reward[]>([]);
 
   // Load data on component mount
   useEffect(() => {
     loadEvents();
-    loadRewards();
   }, []);
 
   const loadEvents = async () => {
@@ -46,24 +36,12 @@ export default function Home() {
     }
   };
 
-  const loadRewards = async () => {
-    try {
-      const response = await fetch('/api/rewards');
-      const data = await response.json();
-      setRewards(data.sort((a: Reward, b: Reward) => b.points - a.points));
-    } catch {
-      console.error('Failed to load rewards');
-    }
-  };
-
   const renderContent = () => {
     switch (currentView) {
       case "calendar":
         return <CalendarView events={events} />;
       case "events":
         return <EventsView events={events} onEventCreated={loadEvents} />;
-      case "rewards":
-        return <RewardsView rewards={rewards} onPointsAdded={loadRewards} />;
       default:
         return <HomeView setCurrentView={setCurrentView} />;
     }
@@ -97,14 +75,7 @@ export default function Home() {
                 onClick={() => setCurrentView("events")}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Events
-              </Button>
-              <Button
-                variant={currentView === "rewards" ? "default" : "outline"}
-                onClick={() => setCurrentView("rewards")}
-              >
-                <Trophy className="w-4 h-4 mr-2" />
-                Rewards
+                Add Events
               </Button>
             </div>
           </div>
@@ -130,7 +101,7 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+      <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
         <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView("calendar")}>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -154,18 +125,6 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
             </CardDescription>
           </CardHeader>
         </Card>
-
-        <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView("rewards")}>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Trophy className="w-5 h-5 mr-2 text-yellow-600" />
-              Rewards
-            </CardTitle>
-            <CardDescription>
-              Track participation and earn rewards for being early
-            </CardDescription>
-          </CardHeader>
-        </Card>
       </div>
 
       <div className="mt-12">
@@ -182,10 +141,6 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
               <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
               <p><strong>Better communication</strong> - Everyone knows about activities and can plan ahead</p>
             </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-2 h-2 bg-yellow-600 rounded-full mt-2"></div>
-              <p><strong>Reward participation</strong> - Recognize those who show up and contribute</p>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -197,7 +152,7 @@ function CalendarView({ events }: { events: Event[] }) {
   const upcomingEvents = events
     .filter(event => new Date(event.date) >= new Date())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 5);
+    .slice(0, 10);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -228,7 +183,9 @@ function CalendarView({ events }: { events: Event[] }) {
                     }`}>
                       <h3 className="font-semibold">{event.name}</h3>
                       <p className="text-sm text-gray-600">{formatDate(event.date)}</p>
-                      <p className="text-sm text-gray-500">{event.location}</p>
+                      {event.location && (
+                        <p className="text-sm text-gray-500">📍 {event.location}</p>
+                      )}
                       {event.description && (
                         <p className="text-sm text-gray-600 mt-1">{event.description}</p>
                       )}
@@ -255,6 +212,20 @@ function CalendarView({ events }: { events: Event[] }) {
                 <div className="text-2xl font-bold text-green-600">{upcomingEvents.length}</div>
                 <div className="text-sm text-gray-600">Upcoming Events</div>
               </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>⏰ Sacrament Reminder</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-2">
+                <strong>Remember:</strong> Arrive by 8:45 AM to help pass the sacrament!
+              </p>
+              <p className="text-xs text-gray-500">
+                This helps avoid scrambling to find people last minute.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -381,151 +352,14 @@ function EventsView({ events, onEventCreated }: { events: Event[], onEventCreate
                     <p className="text-sm text-gray-600">
                       {new Date(event.date).toLocaleDateString()}
                     </p>
-                    <p className="text-sm text-gray-500">{event.location}</p>
+                    {event.location && (
+                      <p className="text-sm text-gray-500">📍 {event.location}</p>
+                    )}
                   </div>
                 ))
               ) : (
                 <p className="text-gray-500">No past events yet.</p>
               )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function RewardsView({ rewards, onPointsAdded }: { rewards: Reward[], onPointsAdded: () => void }) {
-  const [pointsForm, setPointsForm] = useState({ name: '', points: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleAddPoints = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch('/api/rewards', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: pointsForm.name,
-          points: parseInt(pointsForm.points),
-          action: 'add_points'
-        }),
-      });
-
-      if (response.ok) {
-        setPointsForm({ name: '', points: '' });
-        onPointsAdded();
-        alert('Points added successfully!');
-      } else {
-        alert('Failed to add points');
-      }
-    } catch {
-      alert('Error adding points');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div>
-      <h2 className="text-3xl font-bold mb-6">Rewards & Recognition</h2>
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Leaderboard</CardTitle>
-            <CardDescription>Top participants this month</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {rewards.map((reward, index) => (
-                <div key={reward.id} className={`flex items-center justify-between p-3 rounded-md border-l-4 ${
-                  index === 0 ? 'bg-yellow-50 border-yellow-400' :
-                  index === 1 ? 'bg-blue-50 border-blue-400' :
-                  index === 2 ? 'bg-green-50 border-green-400' :
-                  'bg-gray-50 border-gray-400'
-                }`}>
-                  <div>
-                    <h4 className="font-medium">{reward.emoji} {reward.name}</h4>
-                    <p className="text-sm text-gray-600">{reward.description}</p>
-                  </div>
-                  <span className={`text-xl font-bold ${
-                    index === 0 ? 'text-yellow-600' :
-                    index === 1 ? 'text-blue-600' :
-                    index === 2 ? 'text-green-600' :
-                    'text-gray-600'
-                  }`}>
-                    {reward.points}pts
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Add Points</CardTitle>
-            <CardDescription>Reward participation</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddPoints} className="space-y-4">
-              <div>
-                <Label htmlFor="personName">Person Name</Label>
-                <Input
-                  id="personName"
-                  value={pointsForm.name}
-                  onChange={(e) => setPointsForm({...pointsForm, name: e.target.value})}
-                  placeholder="Enter name"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="points">Points to Add</Label>
-                <Input
-                  id="points"
-                  type="number"
-                  value={pointsForm.points}
-                  onChange={(e) => setPointsForm({...pointsForm, points: e.target.value})}
-                  placeholder="Enter points"
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Adding Points...
-                  </>
-                ) : (
-                  'Add Points'
-                )}
-              </Button>
-            </form>
-
-            <div className="mt-6">
-              <h4 className="font-medium mb-2">Point Values:</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Arrive early to sacrament (8:45 AM)</span>
-                  <span className="font-bold text-green-600">+50pts</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Attend Young Men activity</span>
-                  <span className="font-bold text-blue-600">+25pts</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Help organize an event</span>
-                  <span className="font-bold text-purple-600">+75pts</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Bring a friend</span>
-                  <span className="font-bold text-orange-600">+100pts</span>
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>
