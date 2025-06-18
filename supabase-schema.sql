@@ -21,7 +21,7 @@ CREATE TABLE rewards (
 
 -- Insert some default data
 INSERT INTO events (name, date, location, description, type) VALUES
-  ('Sacrament Meeting', CURRENT_DATE + INTERVAL '7 days' + TIME '09:00:00', 'Chapel', 'Please arrive by 8:45 AM to help pass the sacrament', 'sacrament'),
+  ('Sacrament Meeting', CURRENT_DATE + INTERVAL '7 days' + TIME '13:30:00', 'Chapel', 'Please arrive by 1:10 PM, 20 minutes before to help pass the sacrament', 'sacrament'),
   ('Young Men Activity', CURRENT_DATE + INTERVAL '10 days' + TIME '19:00:00', 'Cultural Hall', 'Weekly young men activity', 'activity');
 
 INSERT INTO rewards (name, points, description, emoji) VALUES

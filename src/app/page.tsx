@@ -646,7 +646,7 @@ function CalendarView({ events, onEventUpdated, onEventDeleted }: {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-2">
-                <strong>Remember:</strong> Arrive by 8:45 AM to help pass the sacrament!
+                <strong>Remember:</strong> Arrive by 1:10 PM, 20 minutes before for sacrament!
               </p>
               <p className="text-xs text-gray-500">
                 This helps avoid scrambling to find people last minute.
