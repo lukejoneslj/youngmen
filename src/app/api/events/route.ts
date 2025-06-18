@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, date, location, description } = body;
+    const { name, date, end_date, location, description, activity_types } = body;
 
     if (!name || !date) {
       return NextResponse.json({ error: 'Name and date are required' }, { status: 400 });
@@ -33,9 +33,11 @@ export async function POST(request: NextRequest) {
     const newEvent = {
       name,
       date,
+      end_date: end_date || null,
       location: location || '',
       description: description || '',
       type: 'activity',
+      activity_types: activity_types || [],
     };
 
     const { data, error } = await supabase
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, name, date, location, description } = body;
+    const { id, name, date, end_date, location, description, activity_types } = body;
 
     if (!id || !name || !date) {
       return NextResponse.json({ error: 'ID, name and date are required' }, { status: 400 });
@@ -68,8 +70,10 @@ export async function PUT(request: NextRequest) {
     const updatedEvent = {
       name,
       date,
+      end_date: end_date || null,
       location: location || '',
       description: description || '',
+      activity_types: activity_types || [],
     };
 
     const { data, error } = await supabase

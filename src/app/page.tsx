@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, Plus, Users, Loader2, Edit, Trash2, Megaphone } from "lucide-react";
+import { Calendar, Plus, Users, Loader2, Edit, Trash2, Megaphone, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,9 +31,11 @@ interface Event {
   id: string;
   name: string;
   date: string;
+  end_date?: string;
   location: string;
   description: string;
   type: string;
+  activity_types: string[];
 }
 
 interface Announcement {
@@ -44,15 +46,25 @@ interface Announcement {
   created_at: string;
 }
 
+interface ActivityIdea {
+  id: string;
+  name: string;
+  description: string;
+  activity_types: string[];
+  created_at: string;
+}
+
 export default function Home() {
   const [currentView, setCurrentView] = useState("home");
   const [events, setEvents] = useState<Event[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [activityIdeas, setActivityIdeas] = useState<ActivityIdea[]>([]);
 
   // Load data on component mount
   useEffect(() => {
     loadEvents();
     loadAnnouncements();
+    loadActivityIdeas();
   }, []);
 
   const loadEvents = async () => {
@@ -75,6 +87,16 @@ export default function Home() {
     }
   };
 
+  const loadActivityIdeas = async () => {
+    try {
+      const response = await fetch('/api/activity-ideas');
+      const data = await response.json();
+      setActivityIdeas(data);
+    } catch {
+      console.error('Failed to load activity ideas');
+    }
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case "calendar":
@@ -83,6 +105,8 @@ export default function Home() {
         return <EventsView events={events} onEventCreated={loadEvents} />;
       case "announcements":
         return <AnnouncementsView announcements={announcements} onAnnouncementUpdated={loadAnnouncements} />;
+      case "activity-ideas":
+        return <ActivityIdeasView activityIdeas={activityIdeas} onActivityIdeaUpdated={loadActivityIdeas} />;
       default:
         return <HomeView setCurrentView={setCurrentView} />;
     }
@@ -125,6 +149,13 @@ export default function Home() {
                 <Megaphone className="w-4 h-4 mr-2" />
                 Announcements
               </Button>
+              <Button
+                variant={currentView === "activity-ideas" ? "default" : "outline"}
+                onClick={() => setCurrentView("activity-ideas")}
+              >
+                <Lightbulb className="w-4 h-4 mr-2" />
+                Activity Ideas
+              </Button>
             </div>
           </div>
         </div>
@@ -149,7 +180,7 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
         </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
         <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView("calendar")}>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -182,6 +213,18 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
             </CardTitle>
             <CardDescription>
               Important updates and information for the young men
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView("activity-ideas")}>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Lightbulb className="w-5 h-5 mr-2 text-yellow-600" />
+              Activity Ideas
+            </CardTitle>
+            <CardDescription>
+              Browse and add activity ideas for future planning
             </CardDescription>
           </CardHeader>
         </Card>
@@ -561,25 +604,461 @@ function DeleteAnnouncementDialog({ announcement, onAnnouncementDeleted }: {
   );
 }
 
+function ActivityIdeasView({ activityIdeas, onActivityIdeaUpdated }: { 
+  activityIdeas: ActivityIdea[], 
+  onActivityIdeaUpdated: () => void 
+}) {
+  const getActivityTypeInfo = (typeId: string) => {
+    const types = {
+      'physical': { label: '💪 Physical', color: 'bg-green-100 text-green-800' },
+      'social': { label: '👥 Social', color: 'bg-blue-100 text-blue-800' },
+      'intellectual': { label: '🧠 Intellectual', color: 'bg-purple-100 text-purple-800' },
+      'spiritual': { label: '🙏 Spiritual', color: 'bg-yellow-100 text-yellow-800' }
+    };
+    return types[typeId as keyof typeof types] || { label: typeId, color: 'bg-gray-100 text-gray-800' };
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold">Activity Ideas</h2>
+        <CreateActivityIdeaDialog onActivityIdeaCreated={onActivityIdeaUpdated} />
+      </div>
+      
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {activityIdeas.length > 0 ? (
+          activityIdeas.map((idea) => (
+            <Card key={idea.id} className="h-fit">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">{idea.name}</CardTitle>
+                    {idea.activity_types && idea.activity_types.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {idea.activity_types.map((typeId) => {
+                          const typeInfo = getActivityTypeInfo(typeId);
+                          return (
+                            <span key={typeId} className={`px-2 py-1 rounded-full text-xs font-medium ${typeInfo.color}`}>
+                              {typeInfo.label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex space-x-2">
+                    <EditActivityIdeaDialog activityIdea={idea} onActivityIdeaUpdated={onActivityIdeaUpdated} />
+                    <DeleteActivityIdeaDialog activityIdea={idea} onActivityIdeaDeleted={onActivityIdeaUpdated} />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-700 text-sm">{idea.description}</p>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <div className="col-span-full">
+            <Card>
+              <CardContent className="text-center py-12">
+                <Lightbulb className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500">No activity ideas yet. Add some to get started!</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CreateActivityIdeaDialog({ onActivityIdeaCreated }: { onActivityIdeaCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    activity_types: [] as string[]
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activityTypes = [
+    { id: 'physical', label: '💪 Physical', color: 'bg-green-100 text-green-800' },
+    { id: 'social', label: '👥 Social', color: 'bg-blue-100 text-blue-800' },
+    { id: 'intellectual', label: '🧠 Intellectual', color: 'bg-purple-100 text-purple-800' },
+    { id: 'spiritual', label: '🙏 Spiritual', color: 'bg-yellow-100 text-yellow-800' }
+  ];
+
+  const handleActivityTypeChange = (typeId: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: [...prev.activity_types, typeId]
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: prev.activity_types.filter(t => t !== typeId)
+      }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/activity-ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setFormData({ name: '', description: '', activity_types: [] });
+        onActivityIdeaCreated();
+        setOpen(false);
+      } else {
+        alert('Failed to create activity idea');
+      }
+    } catch {
+      alert('Error creating activity idea');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          New Activity Idea
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px]">
+        <DialogHeader>
+          <DialogTitle>Add Activity Idea</DialogTitle>
+          <DialogDescription>
+            Save an activity idea for future planning.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="idea-name">Activity Name</Label>
+            <Input
+              id="idea-name"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              placeholder="e.g. Basketball Tournament"
+              required
+            />
+          </div>
+          <div>
+            <Label>Activity Types</Label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {activityTypes.map((type) => (
+                <label key={type.id} className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.activity_types.includes(type.id)}
+                    onChange={(e) => handleActivityTypeChange(type.id, e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${type.color}`}>
+                    {type.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="idea-description">Description</Label>
+            <Textarea
+              id="idea-description"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              placeholder="Describe the activity, materials needed, setup instructions, etc..."
+              rows={4}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Activity Idea'
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditActivityIdeaDialog({ activityIdea, onActivityIdeaUpdated }: { 
+  activityIdea: ActivityIdea, 
+  onActivityIdeaUpdated: () => void 
+}) {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: activityIdea.name,
+    description: activityIdea.description,
+    activity_types: activityIdea.activity_types || []
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activityTypes = [
+    { id: 'physical', label: '💪 Physical', color: 'bg-green-100 text-green-800' },
+    { id: 'social', label: '👥 Social', color: 'bg-blue-100 text-blue-800' },
+    { id: 'intellectual', label: '🧠 Intellectual', color: 'bg-purple-100 text-purple-800' },
+    { id: 'spiritual', label: '🙏 Spiritual', color: 'bg-yellow-100 text-yellow-800' }
+  ];
+
+  const handleActivityTypeChange = (typeId: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: [...prev.activity_types, typeId]
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: prev.activity_types.filter(t => t !== typeId)
+      }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/activity-ideas', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: activityIdea.id,
+          ...formData,
+        }),
+      });
+
+      if (response.ok) {
+        onActivityIdeaUpdated();
+        setOpen(false);
+      } else {
+        alert('Failed to update activity idea');
+      }
+    } catch {
+      alert('Error updating activity idea');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Edit className="w-3 h-3" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px]">
+        <DialogHeader>
+          <DialogTitle>Edit Activity Idea</DialogTitle>
+          <DialogDescription>
+            Update the activity idea details below.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="edit-idea-name">Activity Name</Label>
+            <Input
+              id="edit-idea-name"
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+              required
+            />
+          </div>
+          <div>
+            <Label>Activity Types</Label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {activityTypes.map((type) => (
+                <label key={type.id} className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.activity_types.includes(type.id)}
+                    onChange={(e) => handleActivityTypeChange(type.id, e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${type.color}`}>
+                    {type.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="edit-idea-description">Description</Label>
+            <Textarea
+              id="edit-idea-description"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              rows={4}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Update Activity Idea'
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteActivityIdeaDialog({ activityIdea, onActivityIdeaDeleted }: { 
+  activityIdea: ActivityIdea, 
+  onActivityIdeaDeleted: () => void 
+}) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(`/api/activity-ideas?id=${activityIdea.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        onActivityIdeaDeleted();
+      } else {
+        alert('Failed to delete activity idea');
+      }
+    } catch {
+      alert('Error deleting activity idea');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+          <Trash2 className="w-3 h-3" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Activity Idea</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete &ldquo;<strong>{activityIdea.name}</strong>&rdquo;? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              'Delete'
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function CalendarView({ events, onEventUpdated, onEventDeleted }: { 
   events: Event[], 
   onEventUpdated: () => void,
   onEventDeleted: () => void 
 }) {
   const upcomingEvents = events
-    .filter(event => new Date(event.date) >= new Date())
+    .filter(event => {
+      const now = new Date();
+      const eventDate = new Date(event.date);
+      const eventEndDate = event.end_date ? new Date(event.end_date) : eventDate;
+      
+      // Show if event starts in the future OR is currently ongoing (multi-day)
+      return eventDate >= now || (eventDate < now && eventEndDate >= now);
+    })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 10);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
+  const formatDate = (dateString: string, endDateString?: string) => {
+    const startDate = new Date(dateString);
+    
+    if (!endDateString || endDateString === dateString) {
+      // Single day event
+      return startDate.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    }
+    
+    // Multi-day event
+    const endDate = new Date(endDateString);
+    const startDateOnly = startDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
+    const endDateOnly = endDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
+    const startTime = startDate.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit'
     });
+    
+    return `${startDateOnly} - ${endDateOnly} (starts ${startTime})`;
+  };
+
+  const getActivityTypeInfo = (typeId: string) => {
+    const types = {
+      'physical': { label: '💪 Physical', color: 'bg-green-100 text-green-800' },
+      'social': { label: '👥 Social', color: 'bg-blue-100 text-blue-800' },
+      'intellectual': { label: '🧠 Intellectual', color: 'bg-purple-100 text-purple-800' },
+      'spiritual': { label: '🙏 Spiritual', color: 'bg-yellow-100 text-yellow-800' }
+    };
+    return types[typeId as keyof typeof types] || { label: typeId, color: 'bg-gray-100 text-gray-800' };
   };
 
   return (
@@ -600,13 +1079,32 @@ function CalendarView({ events, onEventUpdated, onEventDeleted }: {
                     }`}>
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
-                          <h3 className="font-semibold">{event.name}</h3>
-                          <p className="text-sm text-gray-600">{formatDate(event.date)}</p>
+                          <h3 className="font-semibold">
+                            {event.name}
+                            {event.end_date && event.end_date !== event.date && (
+                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                                Multi-day
+                              </span>
+                            )}
+                          </h3>
+                          <p className="text-sm text-gray-600">{formatDate(event.date, event.end_date)}</p>
                           {event.location && (
                             <p className="text-sm text-gray-500">📍 {event.location}</p>
                           )}
                           {event.description && (
                             <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                          )}
+                          {event.activity_types && event.activity_types.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {event.activity_types.map((typeId) => {
+                                const typeInfo = getActivityTypeInfo(typeId);
+                                return (
+                                  <span key={typeId} className={`px-2 py-1 rounded-full text-xs font-medium ${typeInfo.color}`}>
+                                    {typeInfo.label}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                         <div className="flex space-x-2 ml-4">
@@ -664,10 +1162,33 @@ function EditEventDialog({ event, onEventUpdated }: { event: Event, onEventUpdat
   const [formData, setFormData] = useState({
     name: event.name,
     date: event.date,
+    end_date: event.end_date || '',
     location: event.location,
-    description: event.description
+    description: event.description,
+    activity_types: event.activity_types || []
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activityTypes = [
+    { id: 'physical', label: '💪 Physical', color: 'bg-green-100 text-green-800' },
+    { id: 'social', label: '👥 Social', color: 'bg-blue-100 text-blue-800' },
+    { id: 'intellectual', label: '🧠 Intellectual', color: 'bg-purple-100 text-purple-800' },
+    { id: 'spiritual', label: '🙏 Spiritual', color: 'bg-yellow-100 text-yellow-800' }
+  ];
+
+  const handleActivityTypeChange = (typeId: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: [...prev.activity_types, typeId]
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: prev.activity_types.filter(t => t !== typeId)
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -723,7 +1244,7 @@ function EditEventDialog({ event, onEventUpdated }: { event: Event, onEventUpdat
             />
           </div>
           <div>
-            <Label htmlFor="edit-date">Date & Time</Label>
+            <Label htmlFor="edit-date">Start Date & Time</Label>
             <Input
               id="edit-date"
               type="datetime-local"
@@ -731,6 +1252,19 @@ function EditEventDialog({ event, onEventUpdated }: { event: Event, onEventUpdat
               onChange={(e) => setFormData({...formData, date: e.target.value})}
               required
             />
+          </div>
+          <div>
+            <Label htmlFor="edit-end-date">End Date & Time (Optional)</Label>
+            <Input
+              id="edit-end-date"
+              type="datetime-local"
+              value={formData.end_date}
+              onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+              placeholder="Leave blank for single-day event"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              For multi-day activities like camps or conferences
+            </p>
           </div>
           <div>
             <Label htmlFor="edit-location">Location</Label>
@@ -750,6 +1284,24 @@ function EditEventDialog({ event, onEventUpdated }: { event: Event, onEventUpdat
               placeholder="Additional details..."
               rows={3}
             />
+          </div>
+          <div>
+            <Label>Activity Types</Label>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {activityTypes.map((type) => (
+                <label key={type.id} className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.activity_types.includes(type.id)}
+                    onChange={(e) => handleActivityTypeChange(type.id, e.target.checked)}
+                    className="rounded"
+                  />
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${type.color}`}>
+                    {type.label}
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -835,10 +1387,33 @@ function EventsView({ events, onEventCreated }: { events: Event[], onEventCreate
   const [formData, setFormData] = useState({
     name: '',
     date: '',
+    end_date: '',
     location: '',
-    description: ''
+    description: '',
+    activity_types: [] as string[]
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activityTypes = [
+    { id: 'physical', label: '💪 Physical', color: 'bg-green-100 text-green-800' },
+    { id: 'social', label: '👥 Social', color: 'bg-blue-100 text-blue-800' },
+    { id: 'intellectual', label: '🧠 Intellectual', color: 'bg-purple-100 text-purple-800' },
+    { id: 'spiritual', label: '🙏 Spiritual', color: 'bg-yellow-100 text-yellow-800' }
+  ];
+
+  const handleActivityTypeChange = (typeId: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: [...prev.activity_types, typeId]
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        activity_types: prev.activity_types.filter(t => t !== typeId)
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -854,7 +1429,7 @@ function EventsView({ events, onEventCreated }: { events: Event[], onEventCreate
       });
 
       if (response.ok) {
-        setFormData({ name: '', date: '', location: '', description: '' });
+        setFormData({ name: '', date: '', end_date: '', location: '', description: '', activity_types: [] });
         onEventCreated();
         alert('Event created successfully!');
       } else {
@@ -894,7 +1469,7 @@ function EventsView({ events, onEventCreated }: { events: Event[], onEventCreate
                 />
               </div>
               <div>
-                <Label htmlFor="date">Date & Time</Label>
+                <Label htmlFor="date">Start Date & Time</Label>
                 <Input
                   id="date"
                   type="datetime-local"
@@ -902,6 +1477,19 @@ function EventsView({ events, onEventCreated }: { events: Event[], onEventCreate
                   onChange={(e) => setFormData({...formData, date: e.target.value})}
                   required
                 />
+              </div>
+              <div>
+                <Label htmlFor="end_date">End Date & Time (Optional)</Label>
+                <Input
+                  id="end_date"
+                  type="datetime-local"
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({...formData, end_date: e.target.value})}
+                  placeholder="Leave blank for single-day event"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  For multi-day activities like camps or conferences
+                </p>
               </div>
               <div>
                 <Label htmlFor="location">Location</Label>
@@ -921,6 +1509,24 @@ function EventsView({ events, onEventCreated }: { events: Event[], onEventCreate
                   placeholder="Additional details about the event..."
                   rows={3}
                 />
+              </div>
+              <div>
+                <Label>Activity Types</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {activityTypes.map((type) => (
+                    <label key={type.id} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.activity_types.includes(type.id)}
+                        onChange={(e) => handleActivityTypeChange(type.id, e.target.checked)}
+                        className="rounded"
+                      />
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${type.color}`}>
+                        {type.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? (
