@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, Plus, Users, Loader2, Edit, Trash2 } from "lucide-react";
+import { Calendar, Plus, Users, Loader2, Edit, Trash2, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,13 +36,23 @@ interface Event {
   type: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  created_at: string;
+}
+
 export default function Home() {
   const [currentView, setCurrentView] = useState("home");
   const [events, setEvents] = useState<Event[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   // Load data on component mount
   useEffect(() => {
     loadEvents();
+    loadAnnouncements();
   }, []);
 
   const loadEvents = async () => {
@@ -55,12 +65,24 @@ export default function Home() {
     }
   };
 
+  const loadAnnouncements = async () => {
+    try {
+      const response = await fetch('/api/announcements');
+      const data = await response.json();
+      setAnnouncements(data);
+    } catch {
+      console.error('Failed to load announcements');
+    }
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case "calendar":
         return <CalendarView events={events} onEventUpdated={loadEvents} onEventDeleted={loadEvents} />;
       case "events":
         return <EventsView events={events} onEventCreated={loadEvents} />;
+      case "announcements":
+        return <AnnouncementsView announcements={announcements} onAnnouncementUpdated={loadAnnouncements} />;
       default:
         return <HomeView setCurrentView={setCurrentView} />;
     }
@@ -96,6 +118,13 @@ export default function Home() {
                 <Plus className="w-4 h-4 mr-2" />
                 Add Events
               </Button>
+              <Button
+                variant={currentView === "announcements" ? "default" : "outline"}
+                onClick={() => setCurrentView("announcements")}
+              >
+                <Megaphone className="w-4 h-4 mr-2" />
+                Announcements
+              </Button>
             </div>
           </div>
         </div>
@@ -120,7 +149,7 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
         <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView("calendar")}>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -144,6 +173,18 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
             </CardDescription>
           </CardHeader>
         </Card>
+
+        <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setCurrentView("announcements")}>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Megaphone className="w-5 h-5 mr-2 text-orange-600" />
+              Announcements
+            </CardTitle>
+            <CardDescription>
+              Important updates and information for the young men
+            </CardDescription>
+          </CardHeader>
+        </Card>
       </div>
 
       <div className="mt-12">
@@ -164,6 +205,359 @@ function HomeView({ setCurrentView }: { setCurrentView: (view: string) => void }
         </Card>
       </div>
     </div>
+  );
+}
+
+function AnnouncementsView({ announcements, onAnnouncementUpdated }: { 
+  announcements: Announcement[], 
+  onAnnouncementUpdated: () => void 
+}) {
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high': return 'border-red-500 bg-red-50';
+      case 'medium': return 'border-yellow-500 bg-yellow-50';
+      default: return 'border-blue-500 bg-blue-50';
+    }
+  };
+
+  const getPriorityLabel = (priority: string) => {
+    switch (priority) {
+      case 'high': return '🔴 High Priority';
+      case 'medium': return '🟡 Medium Priority';
+      default: return '🔵 Low Priority';
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold">Announcements</h2>
+        <CreateAnnouncementDialog onAnnouncementCreated={onAnnouncementUpdated} />
+      </div>
+      
+      <div className="space-y-4">
+        {announcements.length > 0 ? (
+          announcements.map((announcement) => (
+            <Card key={announcement.id} className={`border-l-4 ${getPriorityColor(announcement.priority)}`}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">{announcement.title}</CardTitle>
+                    <div className="flex items-center space-x-4 mt-2">
+                      <span className="text-sm font-medium">{getPriorityLabel(announcement.priority)}</span>
+                      <span className="text-sm text-gray-500">{formatDate(announcement.created_at)}</span>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <EditAnnouncementDialog announcement={announcement} onAnnouncementUpdated={onAnnouncementUpdated} />
+                    <DeleteAnnouncementDialog announcement={announcement} onAnnouncementDeleted={onAnnouncementUpdated} />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-700 whitespace-pre-wrap">{announcement.content}</p>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Megaphone className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-500">No announcements yet. Create one to get started!</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CreateAnnouncementDialog({ onAnnouncementCreated }: { onAnnouncementCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    priority: 'low' as 'low' | 'medium' | 'high'
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setFormData({ title: '', content: '', priority: 'low' });
+        onAnnouncementCreated();
+        setOpen(false);
+      } else {
+        alert('Failed to create announcement');
+      }
+    } catch {
+      alert('Error creating announcement');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          New Announcement
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px]">
+        <DialogHeader>
+          <DialogTitle>Create Announcement</DialogTitle>
+          <DialogDescription>
+            Share important information with the young men.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="title">Title</Label>
+            <Input
+              id="title"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              placeholder="e.g. Important Activity Update"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="priority">Priority</Label>
+            <select 
+              id="priority"
+              value={formData.priority}
+              onChange={(e) => setFormData({...formData, priority: e.target.value as 'low' | 'medium' | 'high'})}
+              className="w-full p-2 border rounded-md"
+            >
+              <option value="low">🔵 Low Priority</option>
+              <option value="medium">🟡 Medium Priority</option>
+              <option value="high">🔴 High Priority</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="content">Content</Label>
+            <Textarea
+              id="content"
+              value={formData.content}
+              onChange={(e) => setFormData({...formData, content: e.target.value})}
+              placeholder="Enter the announcement details..."
+              rows={5}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Announcement'
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditAnnouncementDialog({ announcement, onAnnouncementUpdated }: { 
+  announcement: Announcement, 
+  onAnnouncementUpdated: () => void 
+}) {
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    title: announcement.title,
+    content: announcement.content,
+    priority: announcement.priority
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/announcements', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: announcement.id,
+          ...formData,
+        }),
+      });
+
+      if (response.ok) {
+        onAnnouncementUpdated();
+        setOpen(false);
+      } else {
+        alert('Failed to update announcement');
+      }
+    } catch {
+      alert('Error updating announcement');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Edit className="w-3 h-3" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px]">
+        <DialogHeader>
+          <DialogTitle>Edit Announcement</DialogTitle>
+          <DialogDescription>
+            Update the announcement details below.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="edit-title">Title</Label>
+            <Input
+              id="edit-title"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-priority">Priority</Label>
+            <select 
+              id="edit-priority"
+              value={formData.priority}
+              onChange={(e) => setFormData({...formData, priority: e.target.value as 'low' | 'medium' | 'high'})}
+              className="w-full p-2 border rounded-md"
+            >
+              <option value="low">🔵 Low Priority</option>
+              <option value="medium">🟡 Medium Priority</option>
+              <option value="high">🔴 High Priority</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="edit-content">Content</Label>
+            <Textarea
+              id="edit-content"
+              value={formData.content}
+              onChange={(e) => setFormData({...formData, content: e.target.value})}
+              rows={5}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Update Announcement'
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteAnnouncementDialog({ announcement, onAnnouncementDeleted }: { 
+  announcement: Announcement, 
+  onAnnouncementDeleted: () => void 
+}) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(`/api/announcements?id=${announcement.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        onAnnouncementDeleted();
+      } else {
+        alert('Failed to delete announcement');
+      }
+    } catch {
+      alert('Error deleting announcement');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+          <Trash2 className="w-3 h-3" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Announcement</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete &ldquo;<strong>{announcement.title}</strong>&rdquo;? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            {isDeleting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              'Delete'
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
